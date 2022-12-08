@@ -16,13 +16,13 @@ comp_id=`oci-metadata |grep "Compartment OCID" |awk '{print $3}'`
 /bin/cat <<EOM > $promfile
 url=http://$ip:9100/metrics
 namespace=dev_prometheus
-nodeName=$hostnames
+nodeName=$hostname
 metricDimensions=nodeName
 allowMetrics=*
 compartmentId=$comp_id
 EOM
 sleep 60
-if [ -d "/var/lib/oracle-cloud-agent/plugins/oci-managementagent/polaris/agent_inst/discovery/PrometheusEmitter" ]
+if [ -d "/var/lib/oracle-cloud-agent/plugins/oci-managementagent/polaris/agent_inst/discovery/PrometheusEmitter/" ]
 then
     cd /var/lib/oracle-cloud-agent/plugins/oci-managementagent/polaris/agent_inst/discovery/PrometheusEmitter
     cp /tmp/`hostname`.properties .
