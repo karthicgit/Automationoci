@@ -1,0 +1,149 @@
+---
+- hosts: localhost
+  vars_prompt:
+    - name: user_id
+      prompt: Enter the user OCID
+    - name: compartment_ocid
+      prompt: Enter the compartment OCID
+  vars:
+    repo_url: https://github.com/oracle/docker-images.git
+    ocir_repo_name: mgmtagentt
+    base_dir: ./mgmt_agent_scratch
+    region: fra
+    mgmt_agent_install_key_name: ansible_mgmtagent_key
+  gather_facts: false
+  collections:
+    - oracle.oci
+  tasks:
+    - name: Create a local scratch folder
+      ansible.builtin.file:
+        path: ./mgmt_agent_scratch
+        state: directory
+        mode: '0755'
+
+    - name: Create management agent install key
+      oci_management_agent_install_key:
+        compartment_id: "{{compartment_ocid}}"
+        display_name:  "{{mgmt_agent_install_key_name}}"
+        allowed_key_install_count: 100
+        #time_expires: time_expires_example
+      register: key_result
+    - debug: 
+        msg="{{key_result.management_agent_install_key}}"
+    - set_fact:
+        management_agent_install_key: "{{key_result.management_agent_install_key.key}}"
+
+    - name: Create management agent response file
+      copy:
+        content: "######################################################################## \n
+        # Please refer the following Management Agent Installation Guide for more details. \n
+        # \n
+        # https://docs.cloud.oracle.com/iaas/management-agents/index.html  \n
+        #\n
+        # Since this file has sensitive information, please make sure that after \n
+        # executing setup.sh you either delete this file or store it in a secure \n
+        # location. \n
+        # \n
+        ######################################################################## \n
+        ManagementAgentInstallKey = {{management_agent_install_key}} \n
+        AgentDisplayName = k8smonagent \n
+        #Please uncomment the below tags properties and provide values as needed \n
+        #FreeFormTags = [{\"<key1>\":\"<value1>\"}, {\"<key2>\":\"<value2>\"}]\n
+        #DefinedTags = [{\"namespace1\":{\"<key1>\":\"<value1>\"}}, {\"namespace2\":{\"<key2>\":\"<value2>\"}}]\n
+        ProxyHost = \n
+        ProxyPort = \n
+        ProxyUser = \n
+        ProxyPassword = \n
+        ProxyRealm = \n
+        CredentialWalletPassword = \n
+        #Service.plugin.appmgmt.download=true \n
+        #Service.plugin.jms.download=true \n
+        #Service.plugin.dbaas.download=true \n
+        #Service.plugin.logan.download=true
+        #Service.plugin.opsiHost.download=true \n
+        #Service.plugin.jm.download=true" 
+        dest: ./mgmt_agent_scratch/input.rsp
+
+    - name: List management agent images
+      oci_management_agent_image_facts:
+        compartment_id: "{{compartment_ocid}}"
+        install_type: AGENT
+      register: image_result
+    - set_fact:
+        object_url: "{{ item.object_url | split('/')}}"
+        namespace: "{{[4]|map('extract', item.object_url.split('/')) | join()}}"
+        bucket_name: "{{[6]|map('extract', item.object_url.split('/')) | join ()}}"
+        object_name: "{{[8,9,10]|map('extract', item.object_url.split('/')) | join('/')}}"
+
+      with_items: "{{image_result.management_agent_images}}"
+      when:
+        - item.platform_name == "Linux-x86_64"
+        - item.package_type == "ZIP"
+    - debug:
+        msg: "Extracted the agent image details as follows Namespace: {{namespace}} Bucket: {{bucket_name}} Object name: {{object_name}}"
+  
+    - name: Download Management Agent 
+      oci_object_storage_object:
+        namespace_name: "{{namespace}}"
+        bucket_name: "{{bucket_name}}"
+        object_name: "{{object_name}}"
+        dest: ./mgmt_agent_scratch/oracle.mgmt_agent.zip
+      tags: download_agent
+
+    - name: prepare sparse git repository
+      shell: |
+        git init
+        git remote add origin -f {{ repo_url }}
+        git sparse-checkout set OracleManagementAgent
+        git pull origin main
+      args:
+        chdir: "{{ base_dir }}"
+        creates: "{{ base_dir }}/.git"
+
+    - name: Copy mgmtagent zip files into Dockerfiles folder
+      ansible.builtin.copy:
+        dest: "{{ base_dir }}/OracleManagementAgent/dockerfiles/latest"
+        src: "{{ item }}"
+      with_items:
+          - "{{ base_dir }}/oracle.mgmt_agent.zip"
+          - "{{ base_dir }}/input.rsp"
+
+    - name: Get objectstore namespace
+      oci_object_storage_namespace_facts:
+      register: osnamespace
+
+    - name: Create auth_token
+      oci_identity_auth_token:
+        description: Docker login token
+        user_id: "{{ user_id }}"
+      register: auth
+      no_log: True
+      tags: auth
+      
+    - name: Get user facts
+      oracle.oci.oci_identity_user_facts:
+        user_id: "{{ user_id }}"
+      register: user_detail
+
+    - name: Build an image locally
+      community.docker.docker_image:
+        build:
+          path: "{{ base_dir }}/OracleManagementAgent/dockerfiles/latest"
+        name: "{{ region }}.ocir.io/{{ osnamespace.namespace }}/{{ ocir_repo_name }}"
+        tag: v202211
+        source: build
+      tags: localbuild
+    
+    - name: Log into private registry , push image and logout
+      ansible.builtin.shell: |
+        docker login "https://{{ region }}.ocir.io" -u "{{ osnamespace.namespace }}/{{ user_detail.users[0].name }}" -p "{{ auth.auth_token.token }}"
+        docker push {{ region }}.ocir.io/{{ osnamespace.namespace }}/{{ ocir_repo_name }}:v202211
+        docker logout
+      tags: pushtorepo
+
+    - name: Delete auth_token
+      oci_identity_auth_token:
+        user_id: "{{ user_id }}"
+        auth_token_id: "{{auth.auth_token.id}}"
+        state: absent
+      tags: auth
