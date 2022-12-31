@@ -1,6 +1,6 @@
 Instructions for the files under this repo
 
-1. File node_exporter.sh to automate the process outlined in the blog --> https://blogs.oracle.com/observability/post/using-oci-management-agents-to-collect-performance-metrics-for-cloud-native-environments
+1. File node_exporter.sh (cloud init script) to automate the process outlined in the blog --> https://blogs.oracle.com/observability/post/using-oci-management-agents-to-collect-performance-metrics-for-cloud-native-environments
    
-2. File mgmt_agent_install.yaml to automate the process outlined in the blog --> https://blogs.oracle.com/observability/post/monitoring-kubernetes-cluster-using-management-agent-statefulset
+2. File mgmt_agent_install.yaml ansible playbook to automate building docker image and push to OCIR registry outlined in the blog --> https://blogs.oracle.com/observability/post/monitoring-kubernetes-cluster-using-management-agent-statefulset
 
