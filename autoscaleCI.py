@@ -12,8 +12,8 @@ def get_ci(ci_id):
             container_instance_id=ci_id)
         display_name=get_container_instance_response.data.display_name
         return display_name
-    except Exception as ge:
-        print(ge)
+    except Exception as e2:
+        print(str(e2),flush=True)
         exit(1)
 
 #Create Container Instance
@@ -44,7 +44,6 @@ def create_ci(ci_id):
         ci_graceful_shut_time=ci_response.graceful_shutdown_timeout_in_seconds
         vnic = network_client.get_vnic(vnic_id=ci_response.vnics[0].vnic_id).data
         ci_subnet=vnic.subnet_id
-        print(ci_subnet)
 
         #Fetch Volume details
         volumes=[]
@@ -109,9 +108,9 @@ def create_ci(ci_id):
                 container_restart_policy="ON_FAILURE",
                 freeform_tags=ci_freeform_tags))
 
-        return create_container_instance_response.data
+        return f"Container created with ocid {create_container_instance_response.data.id}"
     except Exception as cr:
-        print(cr)
+        print(str(cr),flush=True)
 
 #Delete Container instance
 def list_ci(comp_id,ci_id):
@@ -126,11 +125,10 @@ def list_ci(comp_id,ci_id):
             sort_order="DESC",
             sort_by="timeCreated")
         num_of_ci=len(list_container_instances_response.data.items)
-        print(num_of_ci)
         last_ci_created=list_container_instances_response.data.items[0].id
         return num_of_ci,last_ci_created
     except Exception as e1:
-        print(e1)
+        print(str(e1),flush=True)
 
 
 #Scale out CI
@@ -139,7 +137,7 @@ def scale_out_ci(ci_id,max_ci,comp_id):
     num_ci,last_ci = list_ci(comp_id,ci_id)
 
     if int(num_ci) < int(max_ci):
-            print(f"Creating new container instance and {num_ci}")
+            print(f"Creating new container instance")
             response = create_ci(ci_id)
             return response
     else:
@@ -155,10 +153,9 @@ def scale_in_ci(ci_id,min_ci,comp_id):
     num_ci,last_ci = list_ci(comp_id,ci_id)
 
     if int(num_ci) > int(min_ci):
-        print(f"Deleting container instance and {num_ci}")
-        delete_ci=ci_client.delete_container_instance(
+        ci_client.delete_container_instance(
             container_instance_id=last_ci)
-        return f"Deleting CI with ocid {last_ci} and {delete_ci}"
+        return f"Deleted CI with ocid {last_ci}"
     else:
         print(f"Cant scale in further as min reached")
         return f"Cant scale in further as min reached"
