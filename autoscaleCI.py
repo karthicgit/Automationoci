@@ -66,6 +66,12 @@ def create_ci(ci_id):
             get_container_response = ci_client.get_container(
                 container_id=container.container_id)
             container_data=get_container_response.data
+            if container_data.resource_config is None:
+                ci_resource_config={}
+            else:
+                ci_resource_config=oci.container_instances.models.CreateContainerResourceConfigDetails(
+                memory_limit_in_gbs=container_data.resource_config.memory_limit_in_gbs,
+                vcpus_limit=container_data.resource_config.vcpus_limit)
 
             for v in container_data.volume_mounts:
                 volume_mounts.append(oci.container_instances.models.CreateVolumeMountDetails(
@@ -82,9 +88,7 @@ def create_ci(ci_id):
                 environment_variables=container_data.environment_variables,
                 volume_mounts=volume_mounts,
                 is_resource_principal_disabled=container_data.is_resource_principal_disabled,
-                resource_config=oci.container_instances.models.CreateContainerResourceConfigDetails(
-                    memory_limit_in_gbs=container_data.resource_config.memory_limit_in_gbs,
-                    vcpus_limit=container_data.resource_config.vcpus_limit),
+                resource_config=ci_resource_config,
                 freeform_tags=ci_freeform_tags
             ))
 
@@ -177,6 +181,7 @@ def handler(ctx, data: io.BytesIO=None):
     if alarm_msg["type"] == "OK_TO_FIRING" and "CIalarm" in alarm_msg["title"]:
 
         ci_id = alarm_msg["body"]
+        test=alarm_msg["body"]
 
         func_response = scale_out_ci(ci_id,max_ci,comp_id)
         print("INFO: ", func_response, flush=True)
