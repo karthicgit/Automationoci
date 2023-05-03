@@ -1,13 +1,17 @@
 #!/bin/bash
 version=1.5.0
 os=`uname`
-if [ $os == "Linux" ]
+platform=`uname -p`
+if [[ ($os == "Linux" && $platform == "aarch64") ]]
+then
+    wget https://github.com/prometheus/node_exporter/releases/download/v$version/node_exporter-$version.linux-arm64.tar.gz 
+elif [[ ($os == "Linux" && $platform == "x86_64") ]]
 then
     wget https://github.com/prometheus/node_exporter/releases/download/v$version/node_exporter-$version.linux-amd64.tar.gz
-    tar xvfz node_exporter-$version.linux-amd64.tar.gz
-    cd node_exporter-$version*amd64
-    ./node_exporter &
 fi
+tar xvfz node_exporter-$version.*.tar.gz
+cd node_exporter-$version*
+./node_exporter &
 cd /tmp
 promfile=`hostname`.properties
 ip=`ifconfig | grep "inet " |grep -v 127.0.0.1 |awk '{print $2}'`
