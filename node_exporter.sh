@@ -10,6 +10,7 @@ then
     wget https://github.com/prometheus/node_exporter/releases/download/v$version/node_exporter-$version.linux-amd64.tar.gz
 fi
 tar xvfz node_exporter-$version.*.tar.gz
+rm -f node_exporter-$version.*.tar.gz
 cd node_exporter-$version*
 ./node_exporter &
 cd /tmp
